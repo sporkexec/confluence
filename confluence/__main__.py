@@ -20,6 +20,8 @@ class MyBackendComponent(wamp.ApplicationSession):
 	a simple procedure which can be called remotely from any WAMP peer.
 	It also publishes an event every second to some topic.
 	"""
+	def onConnect(self):
+		self.join('confluence')
 
 	@inlineCallbacks
 	def onJoin(self, details):
@@ -37,7 +39,7 @@ class MyBackendComponent(wamp.ApplicationSession):
 		## publish events to a topic
 		##
 		counter = 0
-		while True:
+		while False:
 			self.publish(u'com.myapp.topic1', counter)
 			print("Published event.")
 			counter += 1
@@ -59,32 +61,5 @@ if __name__ == '__main__':
 
 	site = Site(root)
 	reactor.listenTCP(8080, site)
-	reactor.run()
-
-	exit(42)
-
-
-	## 1) create a WAMP router factory
-	router_factory = router.RouterFactory()
-
-	## 2) create a WAMP router session factory
-	session_factory = wamp.RouterSessionFactory(router_factory)
-
-	## 3) Optionally, add embedded WAMP application sessions to the router
-	session_factory.add(MyBackendComponent())
-
-	## 4) create a WAMP-over-WebSocket transport server factory
-	transport_factory = websocket.WampWebSocketServerFactory(session_factory, debug = False, debug_wamp = False)
-
-	## 5) start the server from a Twisted endpoint
-	server = serverFromString(reactor, "tcp:8080")
-	server.listen(transport_factory)
-
-	#FIXME do this on the fly, figure out where this fits into setup.py
-	resource = File('/home/user/dev/confluence/confluence/web')
-	web_factory = Site(resource)
-	server.listen(web_factory)
-
-	## 6) now enter the Twisted reactor loop
 	reactor.run()
 

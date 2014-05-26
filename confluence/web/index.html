@@ -1,1 +1,48 @@
-We have <b>stuff</b>!
+<!DOCTYPE html>
+<html>
+<body>
+<script src="/autobahn.js"></script>
+<script>
+var sess; //XXX global
+
+// Determine websocket url
+var ws_protocol = 'ws://';
+if(document.location.protocol == 'https://') {
+	ws_protocol = 'wss://';
+}
+var ws_url = ws_protocol + document.location.host + "/ws";
+var ws_realm = 'confluence';
+
+var connection = new autobahn.Connection({url: ws_url, realm: ws_realm});
+connection.onopen = function (session) {
+	console.log('what');
+	sess=session;
+
+	// 1) subscribe to a topic
+	function onevent(args) {
+		console.log("Event:", args[0]);
+	}
+	session.subscribe('com.myapp.topic1', onevent);
+
+	// 2) publish an event
+	//session.publish('com.myapp.hello', ['Hello, world!']);
+
+	// 3) register a procedure for remoting
+	//function add2(args) {
+	//	return args[0] + args[1];
+	//}
+	//session.register('com.myapp.add2', add2);
+
+	// 4) call a remote procedure
+	session.call('com.myapp.add2', [2, 3]).then(
+		function (res) {
+			console.log("Result:", res);
+		}
+	);
+};
+
+connection.open();
+
+</script>
+</body>
+</html>
