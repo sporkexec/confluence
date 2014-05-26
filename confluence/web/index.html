@@ -7,7 +7,7 @@ var sess; //XXX global
 
 // Determine websocket url
 var ws_protocol = 'ws://';
-if(document.location.protocol == 'https://') {
+if(document.location.protocol == 'https:') {
 	ws_protocol = 'wss://';
 }
 var ws_url = ws_protocol + document.location.host + "/ws";

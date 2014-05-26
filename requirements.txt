@@ -2,6 +2,8 @@
 
 twisted
 autobahn
+pyopenssl # needed libffi-dev on wheezy
+service_identity
 #rtorrent-python
 #transmissionrpc
 #deluge has twisted api by default

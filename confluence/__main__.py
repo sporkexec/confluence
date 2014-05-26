@@ -8,11 +8,14 @@ from twisted.internet.endpoints import serverFromString
 
 from twisted.web.server import Site
 from twisted.web.static import File
+from twisted.internet.ssl import DefaultOpenSSLContextFactory
 
 from autobahn.wamp import router
 from autobahn.twisted.util import sleep
 from autobahn.twisted.resource import WebSocketResource
 from autobahn.twisted import wamp, websocket
+
+from config import config
 
 class MyBackendComponent(wamp.ApplicationSession):
 	"""
@@ -21,7 +24,7 @@ class MyBackendComponent(wamp.ApplicationSession):
 	It also publishes an event every second to some topic.
 	"""
 	def onConnect(self):
-		self.join('confluence')
+		self.join(config.websocket_realm)
 
 	@inlineCallbacks
 	def onJoin(self, details):
@@ -45,6 +48,16 @@ class MyBackendComponent(wamp.ApplicationSession):
 			counter += 1
 			yield sleep(1)
 
+def make_server_url():
+	if config.server_ssl_enabled:
+		protocol = 'wss://'
+	else:
+		protocol = 'ws://'
+	host = config.server_host
+	port = config.server_port
+	url = protocol + host + ':' + str(port)
+	return url
+
 if __name__ == '__main__':
 	log.startLogging(sys.stdout)
 
@@ -52,14 +65,19 @@ if __name__ == '__main__':
 	router_factory = router.RouterFactory()
 	session_factory = wamp.RouterSessionFactory(router_factory)
 	session_factory.add(MyBackendComponent())
-	transport_factory = websocket.WampWebSocketServerFactory(session_factory, 'ws://localhost:8080', debug = False, debug_wamp = False)
+	transport_factory = websocket.WampWebSocketServerFactory(session_factory, make_server_url(), debug = False, debug_wamp = False)
 	ws_resource = WebSocketResource(transport_factory)
 
 	# Setup static resource as server root, route in websocket
-	root = File('/home/user/dev/confluence/confluence/web')
-	root.putChild('ws', ws_resource)
+	root = File(config.static_webroot)
+	root.putChild(config.websocket_path, ws_resource)
 
 	site = Site(root)
-	reactor.listenTCP(8080, site)
+	if config.server_ssl_enabled:
+		ssl_context = DefaultOpenSSLContextFactory(config.server_ssl_key_file, config.server_ssl_cert_file)
+		reactor.listenSSL(config.server_port, site, ssl_context)
+	else:
+		reactor.listenTCP(config.server_port, site)
+
 	reactor.run()
 
