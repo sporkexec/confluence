@@ -1,0 +1,7 @@
+# FIXME This probably isn't formatted how it should be.
+
+twisted
+autobahn
+#rtorrent-python
+#transmissionrpc
+#deluge has twisted api by default
