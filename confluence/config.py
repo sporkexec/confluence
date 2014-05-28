@@ -10,7 +10,7 @@ config = AttrDict({
 	'static_webroot': 'confluence/web', #FIXME handle paths smarter
 
 	'server_host': '127.0.0.1',
-	'server_port': 8080, # Hardcoded in web, do not change
+	'server_port': 8080,
 	'server_ssl_enabled': True,
 	'server_ssl_key_file': 'confluence/ssl/snakeoil.key', #FIXME handle paths smarter
 	'server_ssl_cert_file': 'confluence/ssl/snakeoil.crt', #FIXME handle paths smarter
