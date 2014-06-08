@@ -48,7 +48,7 @@ docs/_build/
 
 ### Virtualenv: https://github.com/github/gitignore/blob/master/Global/VirtualEnv.gitignore
 .Python
-[Bb]in
+#[Bb]in
 [Ii]nclude
 [Ll]ib
 [Ss]cripts
