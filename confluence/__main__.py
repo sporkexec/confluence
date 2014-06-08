@@ -4,49 +4,30 @@ import datetime
 from twisted.python import log
 from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks
-from twisted.internet.endpoints import serverFromString
 
 from twisted.web.server import Site
 from twisted.web.static import File
 from twisted.internet.ssl import DefaultOpenSSLContextFactory
 
-from autobahn.wamp import router
-from autobahn.twisted.util import sleep
 from autobahn.twisted.resource import WebSocketResource
-from autobahn.twisted import wamp, websocket
+from autobahn.twisted.websocket import WebSocketServerProtocol, WebSocketServerFactory
 
 from config import config
 
-class MyBackendComponent(wamp.ApplicationSession):
-	"""
-	Application code goes here. This is an example component that provides
-	a simple procedure which can be called remotely from any WAMP peer.
-	It also publishes an event every second to some topic.
-	"""
-	def onConnect(self):
-		self.join(config.websocket_realm)
 
-	@inlineCallbacks
-	def onJoin(self, details):
-
-		## register a procedure for remote calling
-		##
-		def utcnow():
-			print("Someone is calling me;)")
-			now = datetime.datetime.utcnow()
-			return now.strftime("%Y-%m-%dT%H:%M:%SZ")
-
-		reg = yield self.register(utcnow, u'com.timeservice.now')
-		print("Registered procedure with ID {}".format(reg.id))
-
-		## publish events to a topic
-		##
-		counter = 0
-		while False:
-			self.publish(u'com.myapp.topic1', counter)
-			print("Published event.")
-			counter += 1
-			yield sleep(1)
+class MyServerProtocol(WebSocketServerProtocol):
+	def onConnect(self, request):
+		print("Client connecting: {0}".format(request.peer))
+	def onOpen(self):
+		print("WebSocket connection open.")
+	def onMessage(self, payload, isBinary):
+		if isBinary:
+			print("Binary message received: {0} bytes".format(len(payload)))
+		else:
+			print("Text message received: {0}".format(payload.decode('utf8')))
+		self.sendMessage(payload, isBinary)
+	def onClose(self, wasClean, code, reason):
+		print("WebSocket connection closed: {0}".format(reason))
 
 def make_server_url():
 	if config.server_ssl_enabled:
@@ -61,12 +42,11 @@ def make_server_url():
 if __name__ == '__main__':
 	log.startLogging(sys.stdout)
 
-	# Setup websocket resource
-	router_factory = router.RouterFactory()
-	session_factory = wamp.RouterSessionFactory(router_factory)
-	session_factory.add(MyBackendComponent())
-	transport_factory = websocket.WampWebSocketServerFactory(session_factory, make_server_url(), debug = False, debug_wamp = False)
-	ws_resource = WebSocketResource(transport_factory)
+	# Setup websocket protocol
+	server_url = make_server_url()
+	ws_factory = WebSocketServerFactory(server_url, debug=False)
+	ws_factory.protocol = MyServerProtocol
+	ws_resource = WebSocketResource(ws_factory)
 
 	# Setup static resource as server root, route in websocket
 	root = File(config.static_webroot)
