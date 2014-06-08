@@ -1,6 +1,3 @@
-import sys
-import datetime
-
 from twisted.python import log
 from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks
@@ -13,11 +10,13 @@ from autobahn.twisted.resource import WebSocketResource
 from autobahn.twisted.websocket import WebSocketServerProtocol, WebSocketServerFactory
 
 from config import config
+import auth
 
 
 class MyServerProtocol(WebSocketServerProtocol):
 	def onConnect(self, request):
 		print("Client connecting: {0}".format(request.peer))
+		print(request.headers)
 	def onOpen(self):
 		print("WebSocket connection open.")
 	def onMessage(self, payload, isBinary):
@@ -40,17 +39,23 @@ def make_server_url():
 	return url
 
 if __name__ == '__main__':
+	import sys
 	log.startLogging(sys.stdout)
 
-	# Setup websocket protocol
+	# Setup app websocket protocol
 	server_url = make_server_url()
-	ws_factory = WebSocketServerFactory(server_url, debug=False)
-	ws_factory.protocol = MyServerProtocol
-	ws_resource = WebSocketResource(ws_factory)
+	app_ws_factory = WebSocketServerFactory(server_url, debug=False)
+	app_ws_factory.protocol = MyServerProtocol
+	app_ws_resource = WebSocketResource(app_ws_factory)
 
-	# Setup static resource as server root, route in websocket
-	root = File(config.static_webroot)
-	root.putChild(config.websocket_path, ws_resource)
+	# Setup auth websocket protocol
+	auth_ws_factory = auth.AuthFactory(server_url, debug=False)
+	auth_ws_resource = WebSocketResource(auth_ws_factory)
+
+	# Setup static resource as server root, route in websockets
+	root = File(config.app_static_webroot)
+	root.putChild(config.app_websocket_path, app_ws_resource)
+	root.putChild(config.auth_websocket_path, auth_ws_resource)
 
 	site = Site(root)
 	if config.server_ssl_enabled:
