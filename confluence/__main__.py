@@ -8,6 +8,7 @@ from twisted.internet.ssl import DefaultOpenSSLContextFactory
 
 from autobahn.twisted.resource import WebSocketResource
 from autobahn.twisted.websocket import WebSocketServerProtocol, WebSocketServerFactory
+from autobahn.websocket.protocol import createWsUrl
 
 from config import config
 import auth
@@ -28,22 +29,13 @@ class MyServerProtocol(WebSocketServerProtocol):
 	def onClose(self, wasClean, code, reason):
 		print("WebSocket connection closed: {0}".format(reason))
 
-def make_server_url():
-	if config.server_ssl_enabled:
-		protocol = 'wss://'
-	else:
-		protocol = 'ws://'
-	host = config.server_host
-	port = config.server_port
-	url = protocol + host + ':' + str(port)
-	return url
-
 if __name__ == '__main__':
 	import sys
 	log.startLogging(sys.stdout)
 
 	# Setup app websocket protocol
-	server_url = make_server_url()
+	server_url = createWsUrl(config.server_host, port=config.server_port,
+	                         isSecure=config.server_ssl_enabled)
 	app_ws_factory = WebSocketServerFactory(server_url, debug=False)
 	app_ws_factory.protocol = MyServerProtocol
 	app_ws_resource = WebSocketResource(app_ws_factory)
