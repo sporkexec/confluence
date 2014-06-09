@@ -32,30 +32,39 @@ class AuthProtocol(WebSocketServerProtocol):
 	def login(self, args):
 		#FIXME: Rate-limit before processing anything
 		if len(args) != 2:
-			self.sendMessage("ignored:invalid arguments")
+			self.sendMessage("ignored:invalid argument count")
 			return
 
 		username = args[0]
 
 		# For obscurity and allowing special chars, this is over TLS already
 		import base64
-		password = base64.decodestring(args[1])
+		try:
+			password = base64.b64decode(args[1])
+		except TypeError:
+			self.sendMessage("ignored:invalid argument type")
+			return
 
 		valid = self.factory.is_valid_credentials(username, password)
 		if not valid:
 			#FIXME: Record failure for rate-limiting/ip-banning/etc
 			self.sendMessage("failure:Invalid username or password.")
 			return
-		# Success
-		self.sendMessage("success:TODO")
+
+		# Authentication succeeded
+		session = self.factory.create_session(self, username)
+		self.sendMessage("success:{0}:{1}".format(username, session.token))
 
 from autobahn.twisted.websocket import WebSocketServerFactory
 class AuthFactory(WebSocketServerFactory):
 	protocol = AuthProtocol
 	def __init__(self, *args, **kwargs):
 		WebSocketServerFactory.__init__(self, *args, **kwargs)
-		#super(AuthFactory, self).__init__(*args, **kwargs)
 		self._create_safe_compare()
+		# Store of active sessions
+		self._active_sessions = {}
+		# Hashed with session tokens to create unpredictable dict keys
+		self._session_salt = self._generate_session_token()
 
 	def _create_safe_compare(self):
 		"""
@@ -80,7 +89,21 @@ class AuthFactory(WebSocketServerFactory):
 				return result == 0
 		self.safe_compare = safe_compare
 
+	def _generate_session_token(self):
+		from base64 import b64encode
+		from os import urandom
+		# Pull many random bytes then base64 then toss out funny chars for
+		# transport. OWASP recommends minimum 16B session IDs, I'm being
+		# generous with this because I'm uncertain how much entropy can be
+		# tossed out with funny chars in the worst case. After all this
+		# transformation I've seen final lengths of anywhere from 70-86 in
+		# testing.
+		return b64encode(urandom(64)).translate(None, '=/+')
+
 	def is_valid_credentials(self, given_username, given_password):
+		"""
+		Returns whether login credentials are valid.
+		"""
 		# Attempts to be constant-time.
 		import bcrypt
 		from config import config
@@ -93,3 +116,24 @@ class AuthFactory(WebSocketServerFactory):
 				return True
 		return False
 
+	def create_session(self, protocol, username):
+		"""
+		Given a protocol object and the authenticated username, returns a new
+		AuthSession object.
+		"""
+		from datetime import datetime
+		from hashlib import sha256
+		session = AuthSession()
+		session.peer = protocol.peer
+		session.username = username
+		session.time_created = datetime.now()
+		session.time_active = datetime.now()
+		session.token = self._generate_session_token()
+		# Creates unpredictable hash for dict, user-supplied token comes first
+		# to prevent simple length-extension attacks. 
+		session_hash = sha256(session.token + ':' + self._session_salt).hexdigest()
+		self._active_sessions[session_hash] = session
+		return session
+
+from util import AttrDict
+class AuthSession(AttrDict): pass #TODO: Add normal fields here once we suss out requirements

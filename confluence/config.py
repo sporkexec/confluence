@@ -1,10 +1,6 @@
+from datetime import timedelta
 import bcrypt #XXX see below
-
-# Allows accessing values via attributes in addition to keys
-class AttrDict(dict):
-	def __init__(self, *args, **kwargs):
-		super(AttrDict, self).__init__(*args, **kwargs)
-		self.__dict__ = self
+from util import AttrDict
 
 config = AttrDict({
 	'server_host': '127.0.0.1',
@@ -16,6 +12,8 @@ config = AttrDict({
 	'app_static_webroot': 'confluence/web', #FIXME handle paths smarter
 	'app_websocket_path': 'ws', # Hardcoded in web, do not change
 
+	'auth_session_idle_timeout': timedelta(minutes=15),
+	'auth_session_absolute_timeout': timedelta(days=1),
 	'auth_websocket_path': 'auth', # Hardcoded in web, do not change
 	'auth_credentials': { #XXX insecure
 		'root': bcrypt.hashpw('hunter2', bcrypt.gensalt()),
