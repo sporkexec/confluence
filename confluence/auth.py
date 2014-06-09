@@ -85,11 +85,11 @@ class AuthFactory(WebSocketServerFactory):
 		import bcrypt
 		from config import config
 		valid_creds = config.auth_credentials
-		is_valid = 0
 		for (valid_user, valid_hash) in valid_creds.items():
 			iter_hash = bcrypt.hashpw(given_password, valid_hash)
 			user_matches = self.safe_compare(given_username, valid_user)
 			pass_matches = self.safe_compare(iter_hash, valid_hash)
-			is_valid += (int(user_matches) + int(pass_matches)) / 2
-		return is_valid > 0
+			if int(user_matches) + int(pass_matches) == 2:
+				return True
+		return False
 
