@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from twisted.python import log
 from twisted.internet import reactor
 from twisted.internet.defer import inlineCallbacks
@@ -10,8 +12,8 @@ from autobahn.twisted.resource import WebSocketResource
 from autobahn.twisted.websocket import WebSocketServerProtocol, WebSocketServerFactory
 from autobahn.websocket.protocol import createWsUrl
 
-from config import config
-import auth
+from confluence.config import config
+from confluence.auth import AuthFactory
 
 
 class MyServerProtocol(WebSocketServerProtocol):
@@ -41,7 +43,7 @@ if __name__ == '__main__':
 	app_ws_resource = WebSocketResource(app_ws_factory)
 
 	# Setup auth websocket protocol
-	auth_ws_factory = auth.AuthFactory(server_url, debug=False)
+	auth_ws_factory = AuthFactory(server_url, debug=False)
 	auth_ws_resource = WebSocketResource(auth_ws_factory)
 
 	# Setup static resource as server root, route in websockets

@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 from autobahn.twisted.websocket import WebSocketServerProtocol
 class AuthProtocol(WebSocketServerProtocol):
 	"""
@@ -106,7 +108,7 @@ class AuthFactory(WebSocketServerFactory):
 		"""
 		# Attempts to be constant-time.
 		import bcrypt
-		from config import config
+		from confluence.config import config
 		valid_creds = config.auth_credentials
 		for (valid_user, valid_hash) in valid_creds.items():
 			iter_hash = bcrypt.hashpw(given_password, valid_hash)
@@ -135,5 +137,5 @@ class AuthFactory(WebSocketServerFactory):
 		self._active_sessions[session_hash] = session
 		return session
 
-from util import AttrDict
+from confluence.util import AttrDict
 class AuthSession(AttrDict): pass #TODO: Add normal fields here once we suss out requirements

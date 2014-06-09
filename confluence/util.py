@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 # Allows accessing values via attributes in addition to keys
 class AttrDict(dict):
 	def __init__(self, *args, **kwargs):

@@ -1,6 +1,8 @@
+from __future__ import absolute_import
+
 from datetime import timedelta
 import bcrypt #XXX see below
-from util import AttrDict
+from confluence.util import AttrDict
 
 config = AttrDict({
 	'server_host': '127.0.0.1',
