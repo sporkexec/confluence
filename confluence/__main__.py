@@ -13,7 +13,7 @@ from autobahn.twisted.websocket import WebSocketServerProtocol, WebSocketServerF
 from autobahn.websocket.protocol import createWsUrl
 
 from confluence.config import config
-from confluence.auth import AuthFactory
+from confluence.auth import AuthManager, AuthSite
 
 
 class MyServerProtocol(WebSocketServerProtocol):
@@ -42,16 +42,15 @@ if __name__ == '__main__':
 	app_ws_factory.protocol = MyServerProtocol
 	app_ws_resource = WebSocketResource(app_ws_factory)
 
-	# Setup auth websocket protocol
-	auth_ws_factory = AuthFactory(server_url, debug=False)
-	auth_ws_resource = WebSocketResource(auth_ws_factory)
-
 	# Setup static resource as server root, route in websockets
 	root = File(config.app_static_webroot)
 	root.putChild(config.app_websocket_path, app_ws_resource)
-	root.putChild(config.auth_websocket_path, auth_ws_resource)
 
-	site = Site(root)
+	# Wrap it all in authentication
+	auth_manager = AuthManager()
+	site = AuthSite(auth_manager, root)
+
+	site.displayTracebacks = False
 	if config.server_ssl_enabled:
 		ssl_context = DefaultOpenSSLContextFactory(config.server_ssl_key_file, config.server_ssl_cert_file)
 		reactor.listenSSL(config.server_port, site, ssl_context)

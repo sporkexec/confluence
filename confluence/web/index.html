@@ -8,6 +8,8 @@ if(document.location.protocol == 'https:') {
 	ws_protocol = 'wss://';
 }
 var ws_url = ws_protocol + document.location.host + "/ws";
+
+var ws = new WebSocket(ws_url);
 </script>
 </body>
 </html>

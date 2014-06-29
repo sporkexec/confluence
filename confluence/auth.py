@@ -1,67 +1,100 @@
 from __future__ import absolute_import
+from confluence.config import config
 
-from autobahn.twisted.websocket import WebSocketServerProtocol
-class AuthProtocol(WebSocketServerProtocol):
+AUTH_REQUIRED = 1
+AUTH_SUCCESS = 2
+
+from twisted.web.resource import Resource
+class RequestAuthenticationResource(Resource):
+	def render(self, request):
+		from twisted.web import http
+		request.setHeader('WWW-Authenticate', 'Basic realm="{0}"'.format(config.auth_realm))
+		request.setResponseCode(http.UNAUTHORIZED)
+		return ''
+
+class PurgeAuthCredentials(Resource):
+	def render(self, request):
+		#TODO Redirect to root with active:active@host auth to purge creds
+		#     Then have *that* redirect to normal root (clientside somehow, I guess) so url looks normal
+		return ''
+
+from twisted.web.server import Site
+class AuthSite(Site):
 	"""
-	Exposes only functionality necessary to authenticate users and assign
-	session tokens. Every message will have a response. Clients should not send
-	concurrent messages, as no attempt is made to pair requests to their
-	responses.
+	Handles HTTP authentication mechanism. Users navigate to this resource and
+	authenticate with basic auth (over TLS), receiving a session cookie on
+	success. We use this cookie to auth to the application websocket because
+	basic auth headers are not forwarded to websocket connections, but cookies
+	are (go figure).
+
+	Upon successful authentication, a session cookie is given and the client is
+	redirected to an intermediate request which sets the basic auth headers to
+	a safe value, and then redirected to the root of the application.
+
+	Upon logout, the client is redirected to a request which sets the basic
+	auth headers to a known "deauthenticated" value, which lets this resource
+	know to resume requesting credentials rather than sending the client to the
+	application root.
+
+	These steps let us authenticate without exposing credentials to javascript
+	and also work around 
 	"""
-	allowed_commands = ('login',)
+	safe_credential = 'active' # Used to purge browser HTTP auth cache after valid login
+	logout_credential = 'deauth' # Used to indicate user has deauthed, auth will be requested
 
-	def onConnect(self, request):
-		print("[auth] Client connecting: {0}".format(request.peer))
-	def onClose(self, wasClean, code, reason):
-		print("[auth] Connection closed: {0}".format(reason))
+	def __init__(self, auth_manager, root):
+		Site.__init__(self, root)
+		self.auth_manager = auth_manager
 
-	def onMessage(self, payload, isBinary):
-		# Deny binary messages
-		if isBinary:
-			self.sendMessage("ignored:invalid content")
-			return
+	def getResourceFor(self, request):
+		userpass = self.check_userpass_auth(self, request)
+		if userpass == AUTH_SUCCESS:
+			return PurgeAuthCredentials()
 
-		args = payload.split(':')
-		command = args[0]
-		args = args[1:]
+		cookie = self.check_cookie_auth(self, request)
+		if cookie == AUTH_SUCCESS:
+			return Site.getResourceFor(self, request)
 
-		# Whitelist command and handoff to method
-		if command not in self.allowed_commands:
-			self.sendMessage("ignored:invalid command")
-			return
-		getattr(self, command)(args)
+		return RequestAuthenticationResource()
 
-	def login(self, args):
-		#FIXME: Rate-limit before processing anything
-		if len(args) != 2:
-			self.sendMessage("ignored:invalid argument count")
-			return
 
-		username = args[0]
+	def check_userpass_auth(self, request):
+		username = request.getUser()
+		password = request.getPassword()
 
-		# For obscurity and allowing special chars, this is over TLS already
-		import base64
-		try:
-			password = base64.b64decode(args[1])
-		except TypeError:
-			self.sendMessage("ignored:invalid argument type")
-			return
+		if username == self.dummy_credential and password == self.dummy_credential:
+			# HTTP auth cache has been purged, neutral state
+			return AUTH_REQUIRED
 
-		valid = self.factory.is_valid_credentials(username, password)
+		if username == '' and password == '':
+			# No attempt yet, request auth
+			return AUTH_REQUIRED
+
+		if username == self.logout_credential and password == self.logout_credential:
+			# User is requesting logout
+			#TODO lookup and purge session
+			return AUTH_REQUIRED
+
+		#TODO: Rate-limit before processing anything
+		valid = self.auth_manager.is_valid_credentials(username, password)
 		if not valid:
-			#FIXME: Record failure for rate-limiting/ip-banning/etc
-			self.sendMessage("failure:Invalid username or password.")
-			return
+			#TODO: Record failure for rate-limiting/ip-banning/etc
+			return AUTH_REQUIRED
 
 		# Authentication succeeded
-		session = self.factory.create_session(self, username)
-		self.sendMessage("success:{0}:{1}".format(username, session.token))
+		session = self.auth_manager.create_session(request, username)
+		self.set_session(request, session) #FIXME: Use twisted Sessions
+		return AUTH_SUCCESS
 
-from autobahn.twisted.websocket import WebSocketServerFactory
-class AuthFactory(WebSocketServerFactory):
-	protocol = AuthProtocol
-	def __init__(self, *args, **kwargs):
-		WebSocketServerFactory.__init__(self, *args, **kwargs)
+	def set_session(self, request, session):
+		#XXX: twisted.web.http.Request.addCookie could use an httponly flag
+		request.addCookie('CONFLUENCEID', session.token+'; HttpOnly', secure=True)
+
+class AuthManager:
+	"""
+	Handles creation, storage, and checking of all authentication-related state.
+	"""
+	def __init__(self):
 		self._create_safe_compare()
 		# Store of active sessions
 		self._active_sessions = {}
@@ -108,7 +141,6 @@ class AuthFactory(WebSocketServerFactory):
 		"""
 		# Attempts to be constant-time.
 		import bcrypt
-		from confluence.config import config
 		valid_creds = config.auth_credentials
 		for (valid_user, valid_hash) in valid_creds.items():
 			iter_hash = bcrypt.hashpw(given_password, valid_hash)
@@ -118,15 +150,15 @@ class AuthFactory(WebSocketServerFactory):
 				return True
 		return False
 
-	def create_session(self, protocol, username):
+	def create_session(self, request, username):
 		"""
-		Given a protocol object and the authenticated username, returns a new
+		Given a request object and the authenticated username, returns a new
 		AuthSession object.
 		"""
 		from datetime import datetime
 		from hashlib import sha256
 		session = AuthSession()
-		session.peer = protocol.peer
+		session.ip_address = request.getClientIP()
 		session.username = username
 		session.time_created = datetime.now()
 		session.time_active = datetime.now()

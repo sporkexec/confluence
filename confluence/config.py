@@ -14,9 +14,10 @@ config = AttrDict({
 	'app_static_webroot': 'confluence/web', #FIXME handle paths smarter
 	'app_websocket_path': 'ws', # Hardcoded in web, do not change
 
+	'auth_realm': 'confluence',
 	'auth_session_idle_timeout': timedelta(minutes=15),
 	'auth_session_absolute_timeout': timedelta(days=1),
-	'auth_websocket_path': 'auth', # Hardcoded in web, do not change
+	'auth_path': 'auth', # Hardcoded in web, do not change
 	'auth_credentials': { #XXX insecure
 		'root': bcrypt.hashpw('hunter2', bcrypt.gensalt()),
 	},
